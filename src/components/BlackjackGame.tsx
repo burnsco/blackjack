@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { createDeck, shuffleDeck, calculateHandValue, type Card, type Suit, type Rank } from '../lib/blackjack';
-import { Coins, RotateCcw, Play, Hand, User, Bot, AlertCircle } from 'lucide-react';
+import { Coins, RotateCcw, Play, Hand, User, Bot, AlertCircle, ArrowUpCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 type GameState = 'betting' | 'player_turn' | 'dealer_turn' | 'result';
@@ -46,6 +45,7 @@ export default function BlackjackGame() {
   const [gameState, setGameState] = useState<GameState>('betting');
   const [bankroll, setBankroll] = useState(1000);
   const [currentBet, setCurrentBet] = useState(10);
+  const [roundBet, setRoundBet] = useState(0);
   const [message, setMessage] = useState('Place your bet!');
 
   // Initialize deck
@@ -53,9 +53,11 @@ export default function BlackjackGame() {
     setDeck(shuffleDeck(createDeck()));
   }, []);
 
-  const endRound = useCallback((forcedResult?: 'bust' | 'blackjack', finalPlayerHand?: Card[], finalDealerHand?: Card[]) => {
+  const endRound = useCallback((forcedResult?: 'bust' | 'blackjack' | 'dealer_blackjack', finalPlayerHand?: Card[], finalDealerHand?: Card[], specificRoundBet?: number) => {
     const pHand = finalPlayerHand || playerHand;
     const dHand = finalDealerHand || dealerHand;
+    const wager = specificRoundBet || roundBet;
+    
     const pVal = calculateHandValue(pHand);
     const dVal = calculateHandValue(dHand);
     
@@ -65,22 +67,25 @@ export default function BlackjackGame() {
       setMessage('Bust! Dealer wins.');
     } else if (forcedResult === 'blackjack') {
       setMessage('Blackjack! You win 3:2!');
-      setBankroll(prev => prev + currentBet * 2.5);
+      setBankroll(prev => prev + wager * 2.5);
       confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+    } else if (forcedResult === 'dealer_blackjack') {
+      setMessage('Dealer has Blackjack! You lose.');
     } else if (dVal > 21) {
       setMessage('Dealer busts! You win!');
-      setBankroll(prev => prev + currentBet * 2);
+      setBankroll(prev => prev + wager * 2);
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
     } else if (pVal > dVal) {
       setMessage('You win!');
-      setBankroll(prev => prev + currentBet * 2);
+      setBankroll(prev => prev + wager * 2);
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
     } else if (pVal < dVal) {
       setMessage('Dealer wins.');
     } else {
       setMessage('Push (Draw).');
-      setBankroll(prev => prev + currentBet);
+      setBankroll(prev => prev + wager);
     }
-  }, [playerHand, dealerHand, currentBet]);
+  }, [playerHand, dealerHand, roundBet]);
 
   const startNewRound = () => {
     if (bankroll < currentBet) {
@@ -88,7 +93,7 @@ export default function BlackjackGame() {
       return;
     }
 
-    const newDeck = deck.length < 10 ? shuffleDeck(createDeck()) : [...deck];
+    const newDeck = deck.length < 15 ? shuffleDeck(createDeck()) : [...deck];
     const p1 = newDeck.pop()!;
     const d1 = newDeck.pop()!;
     const p2 = newDeck.pop()!;
@@ -96,17 +101,24 @@ export default function BlackjackGame() {
 
     const initialPlayerHand = [p1, p2];
     const initialDealerHand = [d1, d2];
+    const pVal = calculateHandValue(initialPlayerHand);
+    const dVal = calculateHandValue(initialDealerHand);
 
     setPlayerHand(initialPlayerHand);
     setDealerHand(initialDealerHand);
     setDeck(newDeck);
     setBankroll(prev => prev - currentBet);
-    setGameState('player_turn');
-    setMessage('Your turn');
+    setRoundBet(currentBet);
 
-    // Check for natural blackjack
-    if (calculateHandValue(initialPlayerHand) === 21) {
-      endRound('blackjack', initialPlayerHand, initialDealerHand);
+    if (pVal === 21 && dVal === 21) {
+      endRound(undefined, initialPlayerHand, initialDealerHand, currentBet);
+    } else if (pVal === 21) {
+      endRound('blackjack', initialPlayerHand, initialDealerHand, currentBet);
+    } else if (dVal === 21) {
+      endRound('dealer_blackjack', initialPlayerHand, initialDealerHand, currentBet);
+    } else {
+      setGameState('player_turn');
+      setMessage('Your turn');
     }
   };
 
@@ -118,8 +130,34 @@ export default function BlackjackGame() {
     setPlayerHand(newHand);
     setDeck(newDeck);
 
-    if (calculateHandValue(newHand) > 21) {
+    const val = calculateHandValue(newHand);
+    if (val > 21) {
       endRound('bust', newHand);
+    } else if (val === 21) {
+      setGameState('dealer_turn');
+    }
+  };
+
+  const doubleDown = () => {
+    if (bankroll < roundBet) {
+      setMessage("Not enough chips to double down!");
+      return;
+    }
+
+    const newDeck = [...deck];
+    const newCard = newDeck.pop()!;
+    const newHand = [...playerHand, newCard];
+    
+    setBankroll(prev => prev - roundBet);
+    setRoundBet(prev => prev * 2);
+    setPlayerHand(newHand);
+    setDeck(newDeck);
+
+    const val = calculateHandValue(newHand);
+    if (val > 21) {
+      endRound('bust', newHand, dealerHand, roundBet * 2); 
+    } else {
+      setGameState('dealer_turn');
     }
   };
 
@@ -146,9 +184,8 @@ export default function BlackjackGame() {
     }
   }, [gameState, dealerHand, deck, playerHand, endRound]);
 
-  const fold = () => {
-    // Standard fold/surrender: lose half bet
-    setBankroll(prev => prev + Math.floor(currentBet / 2));
+  const surrender = () => {
+    setBankroll(prev => prev + Math.floor(roundBet / 2));
     setGameState('result');
     setMessage('Surrendered. Half bet returned.');
   };
@@ -175,7 +212,7 @@ export default function BlackjackGame() {
             <span className="uppercase text-sm font-bold tracking-widest">Dealer</span>
             {gameState !== 'betting' && (
               <span className="bg-black/20 px-2 py-0.5 rounded text-xs font-mono">
-                {gameState === 'player_turn' ? '?' : calculateHandValue(dealerHand)}
+                {gameState === 'player_turn' && dealerHand.length > 0 ? '?' : calculateHandValue(dealerHand)}
               </span>
             )}
           </div>
@@ -200,7 +237,7 @@ export default function BlackjackGame() {
         <div className="flex flex-col items-center gap-4">
           <div className="flex gap-2 min-h-[144px]">
             {playerHand.map((card, i) => (
-              <div key={i} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div key={i} className="animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
                 <CardUI card={card} />
               </div>
             ))}
@@ -214,6 +251,11 @@ export default function BlackjackGame() {
                 {calculateHandValue(playerHand)}
               </span>
             )}
+            {gameState !== 'betting' && roundBet > 0 && (
+              <span className="ml-4 text-yellow-400 font-mono text-sm">
+                Wager: ${roundBet}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -222,12 +264,13 @@ export default function BlackjackGame() {
       <div className="bg-black/40 p-6 rounded-xl border border-white/5 shadow-inner">
         {gameState === 'betting' ? (
           <div className="flex flex-col md:flex-row gap-6 items-center justify-between w-full">
-            {bankroll < 10 ? (
+            {bankroll < 10 && currentBet > bankroll ? (
               <div className="flex flex-col items-center gap-4 w-full">
                 <p className="text-yellow-400 font-bold">You're out of chips!</p>
                 <button 
                   onClick={() => {
                     setBankroll(1000);
+                    setCurrentBet(10);
                     setMessage('Bankroll recharged! Place your bet.');
                   }}
                   className="bg-emerald-500 hover:bg-emerald-400 text-white px-8 py-3 rounded-full font-bold flex items-center gap-2 transition-all hover:scale-105"
@@ -255,7 +298,8 @@ export default function BlackjackGame() {
                 </div>
                 <button 
                   onClick={startNewRound}
-                  className="bg-yellow-500 hover:bg-yellow-400 text-black px-12 py-4 rounded-full font-black text-xl flex items-center gap-3 transition-all hover:scale-105 active:scale-95 shadow-xl"
+                  disabled={bankroll < currentBet}
+                  className="bg-yellow-500 hover:bg-yellow-400 text-black px-12 py-4 rounded-full font-black text-xl flex items-center gap-3 transition-all hover:scale-105 active:scale-95 shadow-xl disabled:opacity-50 disabled:hover:scale-100"
                 >
                   <Play fill="black" /> DEAL HAND
                 </button>
@@ -263,7 +307,7 @@ export default function BlackjackGame() {
             )}
           </div>
         ) : (
-          <div className="flex justify-center gap-4">
+          <div className="flex justify-center gap-4 flex-wrap">
             {gameState === 'player_turn' ? (
               <>
                 <button 
@@ -278,12 +322,22 @@ export default function BlackjackGame() {
                 >
                   <Bot size={20} /> STAND
                 </button>
-                <button 
-                  onClick={fold}
-                  className="bg-slate-700 hover:bg-slate-600 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 transition-all hover:translate-y-[-2px]"
-                >
-                  <AlertCircle size={20} /> FOLD
-                </button>
+                {playerHand.length === 2 && bankroll >= roundBet && (
+                  <button 
+                    onClick={doubleDown}
+                    className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 transition-all hover:translate-y-[-2px]"
+                  >
+                    <ArrowUpCircle size={20} /> DOUBLE DOWN
+                  </button>
+                )}
+                {playerHand.length === 2 && (
+                  <button 
+                    onClick={surrender}
+                    className="bg-slate-700 hover:bg-slate-600 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 transition-all hover:translate-y-[-2px]"
+                  >
+                    <AlertCircle size={20} /> SURRENDER
+                  </button>
+                )}
               </>
             ) : (
               gameState === 'result' && (
