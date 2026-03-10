@@ -11,7 +11,7 @@ import '../styles/global.css';
 		<meta name="generator" content={Astro.generator} />
 		<title>Classic Blackjack</title>
 	</head>
-	<body class="bg-slate-950 h-[100dvh] flex flex-col items-center justify-center sm:p-4 overflow-hidden">
+	<body class="bg-slate-950 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black h-[100dvh] flex flex-col items-center justify-center sm:p-4 sm:py-8 md:py-12 overflow-hidden">
 		<main class="w-full h-full max-w-5xl flex flex-col sm:justify-center relative overflow-hidden">
 			<BlackjackGame client:load />
 		</main>
@@ -28,18 +28,19 @@ import '../styles/global.css';
     to { opacity: 1; }
   }
 
-  @keyframes slide-in-from-top-4 {
-    from { transform: translateY(-1rem); opacity: 0; }
+  @keyframes slide-in-from-top-8 {
+    from { transform: translateY(-2rem); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
   }
 
-  @keyframes slide-in-from-bottom-4 {
-    from { transform: translateY(1rem); opacity: 0; }
+  @keyframes slide-in-from-bottom-8 {
+    from { transform: translateY(2rem); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
   }
 
   .animate-in {
     animation-duration: 0.5s;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
     animation-fill-mode: both;
   }
 
@@ -47,11 +48,11 @@ import '../styles/global.css';
     animation-name: fade-in;
   }
 
-  .slide-in-from-top-4 {
-    animation-name: slide-in-from-top-4;
+  .slide-in-from-top-8 {
+    animation-name: slide-in-from-top-8;
   }
 
-  .slide-in-from-bottom-4 {
-    animation-name: slide-in-from-bottom-4;
+  .slide-in-from-bottom-8 {
+    animation-name: slide-in-from-bottom-8;
   }
 </style>
