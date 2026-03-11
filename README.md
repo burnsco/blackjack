@@ -41,7 +41,7 @@ A modern, fast, and visually appealing Blackjack game built with **Astro**, **Re
 
 - **Goal**: Get a hand total closer to 21 than the dealer without going over.
 - **Dealer Rules**: Dealer must hit until they have at least 17.
-- **Payouts**: 
+- **Payouts**:
   - Standard Win: 1:1
   - Blackjack: 3:2
   - Push: Bet returned
