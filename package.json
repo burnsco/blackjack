@@ -17,23 +17,23 @@
     "check": "astro check"
   },
   "dependencies": {
-    "@astrojs/react": "^5.0.1",
+    "@astrojs/react": "^5.0.3",
     "@tailwindcss/vite": "^4.2.2",
     "@types/canvas-confetti": "^1.9.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "astro": "^6.0.6",
+    "astro": "^6.1.5",
     "canvas-confetti": "^1.9.4",
-    "lucide-react": "^0.577.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "lucide-react": "^1.7.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
     "tailwindcss": "^4.2.2"
   },
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
-    "oxfmt": "^0.41.0",
-    "oxlint": "^1.56.0"
+    "oxfmt": "^0.44.0",
+    "oxlint": "^1.59.0"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
