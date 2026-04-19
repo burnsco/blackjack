@@ -3,9 +3,12 @@ import {
   createDeck,
   shuffleDeck,
   calculateHandValue,
+  determineOutcome,
+  payoutForOutcome,
+  dealerShouldHit,
+  dealInitialHands,
   type Card,
   type Suit,
-  type Rank,
 } from "../lib/blackjack";
 import { Coins, RotateCcw, Play, Hand, User, Bot, AlertCircle, ArrowUpCircle } from "lucide-react";
 import confetti from "canvas-confetti";
@@ -92,42 +95,42 @@ export default function BlackjackGame() {
   }, []);
 
   const endRound = useCallback(
-    (
-      forcedResult?: "bust" | "blackjack" | "dealer_blackjack",
-      finalPlayerHand?: Card[],
-      finalDealerHand?: Card[],
-      specificRoundBet?: number,
-    ) => {
+    (finalPlayerHand?: Card[], finalDealerHand?: Card[], specificRoundBet?: number) => {
       const pHand = finalPlayerHand || playerHand;
       const dHand = finalDealerHand || dealerHand;
       const wager = specificRoundBet || roundBet;
 
-      const pVal = calculateHandValue(pHand);
-      const dVal = calculateHandValue(dHand);
-
       setGameState("result");
 
-      if (forcedResult === "bust") {
-        setMessage("Bust! Dealer wins.");
-      } else if (forcedResult === "blackjack") {
-        setMessage("Blackjack! You win 3:2!");
-        setBankroll((prev) => prev + wager * 2.5);
-        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-      } else if (forcedResult === "dealer_blackjack") {
-        setMessage("Dealer has Blackjack! You lose.");
-      } else if (dVal > 21) {
-        setMessage("Dealer busts! You win!");
-        setBankroll((prev) => prev + wager * 2);
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-      } else if (pVal > dVal) {
-        setMessage("You win!");
-        setBankroll((prev) => prev + wager * 2);
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-      } else if (pVal < dVal) {
-        setMessage("Dealer wins.");
-      } else {
-        setMessage("Push (Draw).");
-        setBankroll((prev) => prev + wager);
+      const outcome = determineOutcome(pHand, dHand);
+      const payout = payoutForOutcome(outcome, wager);
+      if (payout > 0) setBankroll((prev) => prev + payout);
+
+      switch (outcome) {
+        case "player_blackjack":
+          setMessage("Blackjack! You win 3:2!");
+          confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+          break;
+        case "dealer_blackjack":
+          setMessage("Dealer has Blackjack! You lose.");
+          break;
+        case "player_bust":
+          setMessage("Bust! Dealer wins.");
+          break;
+        case "dealer_bust":
+          setMessage("Dealer busts! You win!");
+          confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+          break;
+        case "player_win":
+          setMessage("You win!");
+          confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+          break;
+        case "dealer_win":
+          setMessage("Dealer wins.");
+          break;
+        case "push":
+          setMessage("Push (Draw).");
+          break;
       }
     },
     [playerHand, dealerHand, roundBet],
@@ -139,29 +142,23 @@ export default function BlackjackGame() {
       return;
     }
 
-    const newDeck = deck.length < 15 ? shuffleDeck(createDeck()) : [...deck];
-    const p1 = newDeck.pop()!;
-    const d1 = newDeck.pop()!;
-    const p2 = newDeck.pop()!;
-    const d2 = newDeck.pop()!;
-
-    const initialPlayerHand = [p1, p2];
-    const initialDealerHand = [d1, d2];
+    const startingDeck = deck.length < 15 ? shuffleDeck(createDeck()) : deck;
+    const {
+      playerHand: initialPlayerHand,
+      dealerHand: initialDealerHand,
+      remainingDeck,
+    } = dealInitialHands(startingDeck);
     const pVal = calculateHandValue(initialPlayerHand);
     const dVal = calculateHandValue(initialDealerHand);
 
     setPlayerHand(initialPlayerHand);
     setDealerHand(initialDealerHand);
-    setDeck(newDeck);
+    setDeck(remainingDeck);
     setBankroll((prev) => prev - currentBet);
     setRoundBet(currentBet);
 
-    if (pVal === 21 && dVal === 21) {
-      endRound(undefined, initialPlayerHand, initialDealerHand, currentBet);
-    } else if (pVal === 21) {
-      endRound("blackjack", initialPlayerHand, initialDealerHand, currentBet);
-    } else if (dVal === 21) {
-      endRound("dealer_blackjack", initialPlayerHand, initialDealerHand, currentBet);
+    if (pVal === 21 || dVal === 21) {
+      endRound(initialPlayerHand, initialDealerHand, currentBet);
     } else {
       setGameState("player_turn");
       setMessage("Your turn");
@@ -178,7 +175,7 @@ export default function BlackjackGame() {
 
     const val = calculateHandValue(newHand);
     if (val > 21) {
-      endRound("bust", newHand);
+      endRound(newHand);
     } else if (val === 21) {
       setGameState("dealer_turn");
     }
@@ -201,7 +198,7 @@ export default function BlackjackGame() {
 
     const val = calculateHandValue(newHand);
     if (val > 21) {
-      endRound("bust", newHand, dealerHand, roundBet * 2);
+      endRound(newHand, dealerHand, roundBet * 2);
     } else {
       setGameState("dealer_turn");
     }
@@ -213,8 +210,7 @@ export default function BlackjackGame() {
 
   useEffect(() => {
     if (gameState === "dealer_turn") {
-      const dealerValue = calculateHandValue(dealerHand);
-      if (dealerValue < 17) {
+      if (dealerShouldHit(dealerHand)) {
         const timer = setTimeout(() => {
           const newDeck = [...deck];
           const newCard = newDeck.pop()!;
@@ -224,7 +220,7 @@ export default function BlackjackGame() {
         }, 800);
         return () => clearTimeout(timer);
       } else {
-        endRound(undefined, playerHand, dealerHand);
+        endRound(playerHand, dealerHand);
       }
     }
   }, [gameState, dealerHand, deck, playerHand, endRound]);
