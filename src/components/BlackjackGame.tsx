@@ -215,8 +215,14 @@ export default function BlackjackGame() {
           const newDeck = [...deck];
           const newCard = newDeck.pop()!;
           const nextDealerHand = [...dealerHand, newCard];
+
           setDealerHand(nextDealerHand);
           setDeck(newDeck);
+
+          const nextDealerValue = calculateHandValue(nextDealerHand);
+          if (nextDealerValue >= 17 || nextDealerValue > 21) {
+            endRound(playerHand, nextDealerHand);
+          }
         }, 800);
         return () => clearTimeout(timer);
       } else {
